@@ -7,10 +7,9 @@ import (
 
 type Cache struct {
 	//如果为0，代表无限制
-	maxBytes int64
-	nBytes   int64
-	list     *list.List
-	cache    map[interface{}]*list.Element
+	maxEntries int
+	list       *list.List
+	cache      map[interface{}]*list.Element
 }
 
 type Key interface{}
@@ -25,11 +24,11 @@ type entry struct {
 	expireTime int64 //过期时间的时间戳
 }
 
-func New(maxBytes int64) *Cache {
+func New(maxEntries int) *Cache {
 	return &Cache{
-		maxBytes: maxBytes,
-		list:     list.New(),
-		cache:    make(map[interface{}]*list.Element),
+		maxEntries: maxEntries,
+		list:       list.New(),
+		cache:      make(map[interface{}]*list.Element),
 	}
 }
 
@@ -43,19 +42,17 @@ func (c *Cache) Add(key Key, value Value, expireTime int64) {
 	if e, ok := c.cache[key]; ok {
 		//将该key对应的元素移动到链表头部
 		c.list.MoveToFront(e)
-		c.nBytes += int64(value.Len() - e.Value.(*entry).value.Len())
 		e.Value.(*entry).value = value
 		e.Value.(*entry).expireTime = expireTime
 		return
 	}
 	//如果不存在，则添加到缓存中
 	//首先检查是否超出最大限制
-	if c.maxBytes > 0 && c.nBytes+int64(value.Len()) > c.maxBytes {
+	if c.maxEntries > 0 && c.list.Len()+1 > c.maxEntries {
 		c.removeElement(c.list.Back())
 	}
 
 	//添加元素
-	c.nBytes += int64(value.Len())
 	e := c.list.PushFront(&entry{key, value, expireTime})
 	c.cache[key] = e
 }
@@ -101,15 +98,10 @@ func (c *Cache) Del(key Key) {
 }
 
 func (c *Cache) removeElement(e *list.Element) {
-	c.nBytes -= int64(e.Value.(*entry).value.Len())
 	//过期了，删除该节点
 	c.list.Remove(e)
 	//同时删除cache中的key
 	delete(c.cache, e.Value.(*entry).key)
-}
-
-func (c *Cache) Size() int64 {
-	return c.nBytes
 }
 
 func (c *Cache) Length() int {

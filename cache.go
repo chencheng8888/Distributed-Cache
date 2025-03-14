@@ -11,16 +11,16 @@ const (
 )
 
 type cache struct {
-	mu         sync.RWMutex
-	lru        *lru.Cache
-	cacheBytes int64
+	mu     sync.RWMutex
+	lru    *lru.Cache
+	nbytes int64
 }
 
 func (c *cache) add(key string, value ByteView, expire time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lru == nil {
-		c.lru = lru.New(c.cacheBytes)
+		c.lru = lru.New(0)
 	}
 	var ttl int64
 	if expire < 0 {
@@ -29,6 +29,7 @@ func (c *cache) add(key string, value ByteView, expire time.Duration) {
 		ttl = time.Now().Add(expire).Unix()
 	}
 	c.lru.Add(key, value, ttl)
+	c.nbytes += int64(len(key)) + int64(value.Len())
 }
 
 func (c *cache) get(key string) (value ByteView, ok bool) {
@@ -54,5 +55,5 @@ func (c *cache) del(key string) {
 func (c *cache) bytes() int64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.lru.Size()
+	return c.nbytes
 }

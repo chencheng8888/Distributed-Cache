@@ -72,7 +72,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	return
 }
 
-func (c *Cache) TTL(key Key) (ttl int64, ok bool) {
+func (c *Cache) ExpireTime(key Key) (expireTime int64, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期

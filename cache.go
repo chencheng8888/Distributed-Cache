@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	NoExpire = -1
+	NoExpire int64 = -1
 )
 
 type cache struct {
@@ -50,6 +50,23 @@ func (c *cache) del(key string) {
 		return
 	}
 	c.lru.Del(key)
+}
+
+func (c *cache) ttl(key string) (ttl int64, ok bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.lru == nil {
+		return
+	}
+	currentTime := time.Now().Unix()
+	expireTime, hit := c.lru.ExpireTime(key)
+	if hit {
+		if expireTime < 0 {
+			return NoExpire, true
+		}
+		return expireTime - currentTime, true
+	}
+	return
 }
 
 func (c *cache) bytes() int64 {

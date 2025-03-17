@@ -46,15 +46,15 @@ func (c *Cache) Add(key Key, value Value, expireTime int64) {
 		e.Value.(*entry).expireTime = expireTime
 		return
 	}
-	//如果不存在，则添加到缓存中
-	//首先检查是否超出最大限制
-	if c.maxEntries > 0 && c.list.Len()+1 > c.maxEntries {
-		c.removeElement(c.list.Back())
-	}
 
 	//添加元素
 	e := c.list.PushFront(&entry{key, value, expireTime})
 	c.cache[key] = e
+
+	//如果缓存已满，则删除最老的元素
+	if c.maxEntries > 0 && c.list.Len() > c.maxEntries {
+		c.RemoveOldest()
+	}
 }
 func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	//首先检查是否cache是否存在
@@ -94,6 +94,16 @@ func (c *Cache) Del(key Key) {
 	}
 	if e, ok := c.cache[key]; ok {
 		c.removeElement(e)
+	}
+}
+
+func (c *Cache) RemoveOldest() {
+	if c.cache == nil {
+		return
+	}
+	ele := c.list.Back()
+	if ele != nil {
+		c.removeElement(ele)
 	}
 }
 

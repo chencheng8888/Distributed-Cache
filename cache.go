@@ -52,6 +52,14 @@ func (c *cache) del(key string) {
 	c.lru.Del(key)
 }
 
+func (c *cache) removeOldest() {
+	c.mu.Lock()
+	defer mu.Unlock()
+	if c.lru != nil {
+		c.lru.RemoveOldest()
+	}
+}
+
 func (c *cache) ttl(key string) (ttl int64, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

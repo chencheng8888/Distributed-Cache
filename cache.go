@@ -48,11 +48,11 @@ func New(peers map[string]distribute.Peer, opts ...CacheOpt) (*Cache, error) {
 	}, nil
 }
 
-func (c *Cache) Get(ctx context.Context, key string) (pkg.ByteView, error) {
+func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 	//首先,先从本地缓存中获取
 	val, ok := c.local.Get(key)
 	if ok {
-		return val, nil
+		return val.ByteSlice(), nil
 	}
 
 	//本地缓存获取不到,从分布式缓存中获取
@@ -66,13 +66,13 @@ func (c *Cache) Get(ctx context.Context, key string) (pkg.ByteView, error) {
 		return res, nil
 	})
 	if err != nil {
-		return pkg.ByteView{}, err
+		return nil, err
 	}
-	return res.(pkg.ByteView), nil
+	return res.(pkg.ByteView).ByteSlice(), nil
 }
 
-func (c *Cache) Add(ctx context.Context, key string, value pkg.ByteView, expireTime time.Duration) error {
-	return c.distribute.Add(ctx, key, value, expireTime)
+func (c *Cache) Add(ctx context.Context, key string, value []byte, expireTime time.Duration) error {
+	return c.distribute.Add(ctx, key, pkg.NewByteView(value), expireTime)
 }
 
 func (c *Cache) AddNode(name string, peer distribute.Peer) error {

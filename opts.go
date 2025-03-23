@@ -25,6 +25,25 @@ type CacheOpts struct {
 	migrationGoroutineLimit int
 }
 
+func (o CacheOpts) LocalCacheExpire() time.Duration {
+	return o.localCacheExpire
+}
+func (o CacheOpts) LocalCacheMaxBytes() int64 {
+	return o.localCacheMaxBytes
+}
+func (o CacheOpts) HashFunc() func(data []byte) uint32 {
+	return o.hashFunc
+}
+func (o CacheOpts) Replicas() int {
+	return o.replicas
+}
+func (o CacheOpts) MigrationBatchSize() int {
+	return o.migrationBatchSize
+}
+func (o CacheOpts) MigrationGoroutineLimit() int {
+	return o.migrationGoroutineLimit
+}
+
 // WithLocalCacheExpire 本地缓存的过期时间
 func WithLocalCacheExpire(expire time.Duration) CacheOpt {
 	return func(opts *CacheOpts) {

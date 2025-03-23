@@ -82,3 +82,7 @@ func (c *Cache) AddNode(name string, peer distribute.Peer) error {
 func (c *Cache) RemoveNode(name string) error {
 	return c.distribute.RemoveNode(name)
 }
+
+func (c *Cache) Opts() CacheOpts {
+	return c.opts
+}

@@ -58,7 +58,7 @@ func (c *Cache) Add(key string, value Value, expireTime int64) {
 
 	//如果缓存已满，则删除最老的元素
 	for c.maxBytes > 0 && c.nBytes > c.maxBytes {
-		c.RemoveOldest()
+		c.removeOldest()
 	}
 }
 func (c *Cache) Get(key string) (value Value, ok bool) {
@@ -102,7 +102,7 @@ func (c *Cache) Del(key string) {
 	}
 }
 
-func (c *Cache) RemoveOldest() {
+func (c *Cache) removeOldest() {
 	if c.cache == nil {
 		return
 	}

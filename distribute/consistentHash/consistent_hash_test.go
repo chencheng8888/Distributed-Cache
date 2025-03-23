@@ -2,6 +2,7 @@ package consistentHash
 
 import (
 	"github.com/stretchr/testify/assert"
+	"hash/crc32"
 	"testing"
 )
 
@@ -31,8 +32,11 @@ func TestMap_Add(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := New(10, nil)
-			m.Add(tt.args.nodes...)
+			m := New(10, crc32.ChecksumIEEE)
+			for _, node := range tt.args.nodes {
+				m.Add(node)
+			}
+
 			assert.Equal(t, tt.wantLen, len(m.nodes))
 			t.Log(m.nodes)
 			t.Log(m.hashMap)
@@ -61,8 +65,10 @@ func TestMap_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := New(10, nil)
-			m.Add(tt.args.nodes...)
+			m := New(10, crc32.ChecksumIEEE)
+			for _, node := range tt.args.nodes {
+				m.Add(node)
+			}
 			assert.Equal(t, tt.want, m.Get(tt.args.key))
 		})
 	}

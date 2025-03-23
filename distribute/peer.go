@@ -1,7 +1,7 @@
-package distributedCache
+package distribute
 
 import (
-	"Distributed-Cache/distributedCache/consistentHash"
+	"Distributed-Cache/distribute/consistentHash"
 	"context"
 	"errors"
 	"fmt"
@@ -51,39 +51,66 @@ type Peer interface {
 	//额外提供一个同时获取val和ttl的方法，减少网络请求次数
 	GetAndTTL(ctx context.Context, identity, key string) ([]byte, time.Duration, error)
 	//批量获取全部key的方法
-	GetBatchKey(ctx context.Context, identity string, batch uint, keyCh chan<- string)
+	GetBatchKey(ctx context.Context, identity string, batch int, keyCh chan<- string)
 
 	//添加元素
 	Add(ctx context.Context, identity string, elements ...Element) error
 
 	//删除元素
 	Del(ctx context.Context, identity string, key ...string) error
+
+	//测试连接
+	Ping() bool
 }
 
 type PeerManager interface {
 	PickPeer(key string) (Peer, bool)
-	AddPeer(name, addr string) error
+	AddPeer(name string, peer Peer) error
 	RemovePeer(name string) error
 	RedistributionKeys() error
+	InitPeers(peers map[string]Peer)
 }
 
 type PeerManagerImpl struct {
 	mu    sync.RWMutex
 	peers map[string]Peer
 	//即将下线的结点，但是在数据迁移期间，其仍可以接受读操作
-	offlineSoon     map[string]Peer
-	hash            consistentHash.Map
-	peerConstructor func(name, addr string) (Peer, error)
+	offlineSoon map[string]Peer
+	hash        consistentHash.Map
 	//是否正在迁移数据
 	IsBeingMigrated bool
 	//批量获取key的数量
-	batch uint
+	batch int
 	pool  *ants.Pool
 }
 
+func NewPeerManager(mp consistentHash.Map, batch int, poolSize int) (PeerManager, error) {
+
+	pool, err := ants.NewPool(poolSize)
+	if err != nil {
+		return nil, errors.New("create goroutine pool failed")
+	}
+
+	return &PeerManagerImpl{
+		peers:       make(map[string]Peer),
+		offlineSoon: make(map[string]Peer),
+		hash:        mp,
+		batch:       batch,
+		pool:        pool,
+	}, nil
+}
+
 func (p *PeerManagerImpl) InitPeers(peers map[string]Peer) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	//加载peers
 	for name, peer := range peers {
+		if peer == nil {
+			continue
+		}
+		if !peer.Ping() {
+			continue
+		}
 		p.peers[name] = peer
 		p.hash.Add(name)
 	}
@@ -207,7 +234,7 @@ outerLoop: // 定义标签
 		select {
 		case element, ok := <-elements:
 			handleElements = append(handleElements, element)
-			if !ok || uint(len(handleElements)) >= p.batch {
+			if !ok || len(handleElements) >= p.batch {
 				err := to.Add(ctx, Server, handleElements...)
 				if err != nil {
 					log.Printf("add elements to one peer[%v %v] failed: %v", to.Name(), to.Addr(), err)
@@ -235,7 +262,7 @@ outerLoop: // 定义标签
 		err := p.pool.Submit(func() {
 			defer wg.Done()
 			var err error
-			if uint(len(toBeMigratedKeys)) >= p.batch {
+			if len(toBeMigratedKeys) >= p.batch {
 				err = from.Del(ctx, Server, toBeMigratedKeys[:p.batch]...)
 				toBeMigratedKeys = toBeMigratedKeys[p.batch:]
 			} else {
@@ -345,7 +372,7 @@ func (p *PeerManagerImpl) RemovePeer(name string) error {
 	return nil
 }
 
-func (p *PeerManagerImpl) AddPeer(name, addr string) error {
+func (p *PeerManagerImpl) AddPeer(name string, peer Peer) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -371,9 +398,11 @@ func (p *PeerManagerImpl) AddPeer(name, addr string) error {
 	if _, ok := p.peers[name]; ok {
 		return errors.New("the name already exists")
 	}
-	peer, err := p.peerConstructor(name, addr)
-	if err != nil {
-		return err
+	if peer == nil {
+		return errors.New("peer is nil")
+	}
+	if !peer.Ping() {
+		return errors.New("peer is not available")
 	}
 	p.peers[name] = peer
 	p.hash.Add(name)
@@ -414,7 +443,7 @@ func (p *PeerManagerImpl) AddPeer(name, addr string) error {
 		log.Println("start migrating data")
 		for node, keys := range fromOtherNodeKeys {
 			wg.Add(1)
-			err = p.pool.Submit(func() {
+			err := p.pool.Submit(func() {
 				defer wg.Done()
 				log.Printf("start migrating data[%v] from %v to %v", keys, node, peer.Name())
 				p.migrateData(context.Background(), p.peers[node], peer, keys)

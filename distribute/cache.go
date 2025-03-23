@@ -1,4 +1,4 @@
-package distributedCache
+package distribute
 
 import (
 	"Distributed-Cache/pkg"
@@ -17,8 +17,16 @@ func NewCache(peerManager PeerManager) *Cache {
 	}
 }
 
-func (c *Cache) AddNode(name, addr string) error {
-	return c.peerManager.AddPeer(name, addr)
+func (c *Cache) InitPeers(peers map[string]Peer) {
+	c.peerManager.InitPeers(peers)
+}
+
+func (c *Cache) RedistributionKeys() error {
+	return c.peerManager.RedistributionKeys()
+}
+
+func (c *Cache) AddNode(name string, peer Peer) error {
+	return c.peerManager.AddPeer(name, peer)
 }
 
 func (c *Cache) RemoveNode(name string) error {

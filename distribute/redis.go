@@ -1,4 +1,4 @@
-package distributedCache
+package distribute
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 )
+
+//使用go-redis["github.com/redis/go-redis/v9"]实现peer接口
 
 type RedisPeer struct {
 	name string
@@ -33,6 +35,10 @@ func (r *RedisPeer) Name() string {
 
 func (r *RedisPeer) Addr() string {
 	return r.cli.Options().Addr
+}
+
+func (r *RedisPeer) Ping() bool {
+	return r.cli.Ping(context.Background()).Err() == nil
 }
 
 func (r *RedisPeer) Mode() int {
@@ -108,7 +114,7 @@ func (r *RedisPeer) GetAndTTL(ctx context.Context, identity, key string) ([]byte
 	return val, ttl, nil
 }
 
-func (r *RedisPeer) GetBatchKey(ctx context.Context, identity string, batch uint, keyCh chan<- string) {
+func (r *RedisPeer) GetBatchKey(ctx context.Context, identity string, batch int, keyCh chan<- string) {
 	defer func() {
 		close(keyCh)
 	}()
@@ -119,7 +125,7 @@ func (r *RedisPeer) GetBatchKey(ctx context.Context, identity string, batch uint
 		}
 	}
 
-	if batch == 0 {
+	if batch <= 0 {
 		return
 	}
 

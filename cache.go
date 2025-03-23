@@ -1,29 +1,34 @@
 package Distributed_Cache
 
 import (
-	"Distributed-Cache/distributedCache"
-	"Distributed-Cache/localCache"
+	"Distributed-Cache/distribute"
+	"Distributed-Cache/local"
 	"Distributed-Cache/pkg"
 	"context"
+	"errors"
 	"golang.org/x/sync/singleflight"
 	"sync"
 	"time"
 )
 
 type Cache struct {
-	mu               sync.RWMutex
-	local            *localCache.LocalCache
-	distribute       *distributedCache.Cache
-	singleGroup      singleflight.Group
-	localCacheExpire time.Duration
+	mu          sync.RWMutex
+	local       *local.Cache
+	distribute  *distribute.Cache
+	singleGroup singleflight.Group
+	opts        CacheOpts
 }
 
-func NewCacheHandler(local *localCache.LocalCache, distribute *distributedCache.Cache) *Cache {
-	return &Cache{
-		local:            local,
-		distribute:       distribute,
-		localCacheExpire: 5 * time.Minute,
+func New(peers map[string]distribute.Peer, opts ...CacheOpt) (*Cache, error) {
+	if len(peers) <= 0 {
+		return nil, errors.New("the length of cache node should be greater than 0")
 	}
+
+	cacheOpts := defaultOpts
+	for _, opt := range opts {
+		opt(&cacheOpts)
+	}
+	repairOpts(&cacheOpts)
 }
 
 func (c *Cache) Get(ctx context.Context, key string) (pkg.ByteView, error) {
@@ -40,7 +45,7 @@ func (c *Cache) Get(ctx context.Context, key string) (pkg.ByteView, error) {
 		if err != nil {
 			return pkg.ByteView{}, err
 		}
-		c.local.Add(key, res, time.Now().Add(c.localCacheExpire).Unix())
+		c.local.Add(key, res, time.Now().Add(c.opts.localCacheExpire).Unix())
 		return res, nil
 	})
 	if err != nil {
@@ -53,8 +58,8 @@ func (c *Cache) Add(ctx context.Context, key string, value pkg.ByteView, expireT
 	return c.distribute.Add(ctx, key, value, expireTime)
 }
 
-func (c *Cache) AddNode(name, addr string) error {
-	return c.distribute.AddNode(name, addr)
+func (c *Cache) AddNode(name string, peer distribute.Peer) error {
+	return c.distribute.AddNode(name, peer)
 }
 
 func (c *Cache) RemoveNode(name string) error {

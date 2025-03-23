@@ -1,7 +1,6 @@
 package Distributed_Cache
 
 import (
-	"Distributed-Cache/distribute/consistentHash"
 	"hash/crc32"
 	"time"
 )
@@ -20,7 +19,7 @@ type CacheOpt func(*CacheOpts)
 type CacheOpts struct {
 	localCacheExpire        time.Duration
 	localCacheMaxBytes      int64 //如果为0，则代表无限制
-	hashFunc                consistentHash.Hash
+	hashFunc                func(data []byte) uint32
 	replicas                int //虚拟节点倍数
 	migrationBatchSize      int //迁移结点数据时一次迁移的key数
 	migrationGoroutineLimit int
@@ -41,7 +40,7 @@ func WithLocalCacheMaxBytes(maxBytes int64) CacheOpt {
 }
 
 // WithHashFunc 一致性哈希函数
-func WithHashFunc(hashFunc consistentHash.Hash) CacheOpt {
+func WithHashFunc(hashFunc func(data []byte) uint32) CacheOpt {
 	return func(opts *CacheOpts) {
 		opts.hashFunc = hashFunc
 	}

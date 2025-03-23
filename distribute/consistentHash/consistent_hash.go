@@ -1,7 +1,6 @@
 package consistentHash
 
 import (
-	"hash/crc32"
 	"sort"
 	"strconv"
 )
@@ -18,16 +17,15 @@ type Map struct {
 	trueNode map[string]struct{}
 }
 
+type Replicas int
+
 // New 创建一致性哈希
-func New(replicas int, fn Hash) Map {
+func New(replicas Replicas, fn Hash) Map {
 	m := Map{
-		replicas: replicas,
+		replicas: int(replicas),
 		hash:     fn,
 		hashMap:  make(map[int]string),
 		trueNode: make(map[string]struct{}),
-	}
-	if m.hash == nil {
-		m.hash = crc32.ChecksumIEEE
 	}
 	return m
 }

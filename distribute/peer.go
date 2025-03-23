@@ -84,9 +84,11 @@ type PeerManagerImpl struct {
 	pool  *ants.Pool
 }
 
-func NewPeerManager(mp consistentHash.Map, batch int, poolSize int) (PeerManager, error) {
+type Batch int
+type PoolSize int
 
-	pool, err := ants.NewPool(poolSize)
+func NewPeerManager(mp consistentHash.Map, batch Batch, poolSize PoolSize) (PeerManager, error) {
+	pool, err := ants.NewPool(int(poolSize))
 	if err != nil {
 		return nil, errors.New("create goroutine pool failed")
 	}
@@ -95,7 +97,7 @@ func NewPeerManager(mp consistentHash.Map, batch int, poolSize int) (PeerManager
 		peers:       make(map[string]Peer),
 		offlineSoon: make(map[string]Peer),
 		hash:        mp,
-		batch:       batch,
+		batch:       int(batch),
 		pool:        pool,
 	}, nil
 }

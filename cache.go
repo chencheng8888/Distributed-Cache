@@ -2,7 +2,9 @@ package Distributed_Cache
 
 import (
 	"Distributed-Cache/distribute"
+	"Distributed-Cache/distribute/consistentHash"
 	"Distributed-Cache/local"
+	"Distributed-Cache/local/lru"
 	"Distributed-Cache/pkg"
 	"context"
 	"errors"
@@ -29,6 +31,21 @@ func New(peers map[string]distribute.Peer, opts ...CacheOpt) (*Cache, error) {
 		opt(&cacheOpts)
 	}
 	repairOpts(&cacheOpts)
+
+	localCache := local.WireCache(lru.MaxBytes(cacheOpts.localCacheMaxBytes))
+	distributeCache, err := distribute.WireCache(consistentHash.Replicas(cacheOpts.replicas),
+		cacheOpts.hashFunc,
+		distribute.Batch(cacheOpts.migrationBatchSize),
+		distribute.PoolSize(cacheOpts.migrationGoroutineLimit))
+	if err != nil {
+		return nil, err
+	}
+	distributeCache.InitPeers(peers)
+	return &Cache{
+		local:      localCache,
+		distribute: distributeCache,
+		opts:       cacheOpts,
+	}, nil
 }
 
 func (c *Cache) Get(ctx context.Context, key string) (pkg.ByteView, error) {

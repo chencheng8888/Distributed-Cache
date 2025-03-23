@@ -23,9 +23,11 @@ type entry struct {
 	expireTime int64 //过期时间的时间戳
 }
 
-func New(maxBytes int64) *Cache {
+type MaxBytes int64
+
+func New(maxBytes MaxBytes) *Cache {
 	return &Cache{
-		maxBytes: maxBytes,
+		maxBytes: int64(maxBytes),
 		list:     list.New(),
 		cache:    make(map[interface{}]*list.Element),
 	}

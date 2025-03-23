@@ -40,6 +40,8 @@ type Peer interface {
 	//基本信息
 	Name() string
 	Addr() string
+	Len() int
+	Bytes() int64
 
 	//模式
 	Mode() int
@@ -69,6 +71,7 @@ type PeerManager interface {
 	RemovePeer(name string) error
 	RedistributionKeys() error
 	InitPeers(peers map[string]Peer)
+	GetPeer(name string) (Peer, bool)
 }
 
 type PeerManagerImpl struct {
@@ -81,7 +84,8 @@ type PeerManagerImpl struct {
 	IsBeingMigrated bool
 	//批量获取key的数量
 	batch int
-	pool  *ants.Pool
+	//goroutine池
+	pool *ants.Pool
 }
 
 type Batch int
@@ -471,10 +475,16 @@ func (p *PeerManagerImpl) PickPeer(key string) (Peer, bool) {
 		return nil, false
 	}
 
-	if peer, ok := p.peers[peerName]; ok {
+	if peer, ok := p.GetPeer(peerName); ok {
 		return peer, true
 	}
 	if peer, ok := p.offlineSoon[peerName]; ok {
+		return peer, true
+	}
+	return nil, false
+}
+func (p *PeerManagerImpl) GetPeer(name string) (Peer, bool) {
+	if peer, ok := p.peers[name]; ok {
 		return peer, true
 	}
 	return nil, false

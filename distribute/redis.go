@@ -3,6 +3,7 @@ package distribute
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 	"log"
 	"sync"
@@ -16,6 +17,29 @@ type RedisPeer struct {
 	cli  *redis.Client
 	mode int
 	mu   sync.RWMutex
+}
+
+func (r *RedisPeer) Len() int {
+	count, err := r.cli.DBSize(context.Background()).Result()
+	if err != nil {
+		log.Printf("redis get the num of keys failed: %v", err)
+		return 0
+	}
+	return int(count)
+}
+
+func (r *RedisPeer) Bytes() int64 {
+	// 获取 INFO MEMORY 里的 used_memory
+	info, err := r.cli.Info(context.Background(), "memory").Result()
+	if err != nil {
+		log.Printf("failed to obtain memory information: %v", err)
+		return 0
+	}
+
+	// 解析 used_memory 字段
+	var usedMemory int64
+	fmt.Sscanf(info, "%*s used_memory:%d", &usedMemory) // 提取 used_memory
+	return usedMemory
 }
 
 func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {

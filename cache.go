@@ -74,14 +74,14 @@ func (c *Cache) Add(ctx context.Context, key string, value []byte, expireTime ti
 	return c.distribute.Add(ctx, key, pkg.NewByteView(value), expireTime)
 }
 
-// AddNode 添加节点
-func (c *Cache) AddNode(name string, peer distribute.Peer) error {
-	return c.distribute.AddNode(name, peer)
+// AddPeer 添加节点
+func (c *Cache) AddPeer(name string, peer distribute.Peer) error {
+	return c.distribute.AddPeer(name, peer)
 }
 
-// RemoveNode 移除节点
-func (c *Cache) RemoveNode(name string) error {
-	return c.distribute.RemoveNode(name)
+// RemovePeer 移除节点
+func (c *Cache) RemovePeer(name string) error {
+	return c.distribute.RemovePeer(name)
 }
 
 // RedistributionKeys 重新分配key
@@ -91,4 +91,22 @@ func (c *Cache) RedistributionKeys() error {
 
 func (c *Cache) Opts() CacheOpts {
 	return c.opts
+}
+
+type DataInfo interface {
+	Len() int
+	Bytes() int64
+}
+
+type PeerInfo interface {
+	DataInfo
+	Name() string
+	Addr() string
+}
+
+func (c *Cache) LocalDataInfo() DataInfo {
+	return c.local
+}
+func (c *Cache) PeerInfo(name string) (PeerInfo, bool) {
+	return c.distribute.GetPeer(name)
 }

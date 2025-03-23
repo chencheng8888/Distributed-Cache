@@ -1,7 +1,11 @@
-package Distributed_Cache
+package pkg
 
 type ByteView struct {
 	b []byte
+}
+
+func NewByteView(b []byte) ByteView {
+	return ByteView{b: b}
 }
 
 func (v ByteView) Len() int {

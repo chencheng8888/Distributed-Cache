@@ -16,8 +16,8 @@ func (tv testValue) Len() int {
 
 func TestCache_Get(t *testing.T) {
 	type args struct {
-		maxEntries int
-		key        Key
+		maxBytes   int64
+		key        string
 		value      Value
 		expireTime int64
 	}
@@ -31,7 +31,7 @@ func TestCache_Get(t *testing.T) {
 		{
 			name: "缓存命中",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "test_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(time.Second * 10).Unix(),
@@ -45,7 +45,7 @@ func TestCache_Get(t *testing.T) {
 		{
 			name: "缓存未命中",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "test_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(time.Second * 10).Unix(),
@@ -58,7 +58,7 @@ func TestCache_Get(t *testing.T) {
 		{
 			name: "键值对过期",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   3,
 				key:        "test_key",
 				value:      testValue{"test_value"},
 				expireTime: 100,
@@ -72,7 +72,7 @@ func TestCache_Get(t *testing.T) {
 		{
 			name: "值被更新",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "test_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(time.Second * 10).Unix(),
@@ -87,7 +87,7 @@ func TestCache_Get(t *testing.T) {
 		{
 			name: "kv对被LRU算法淘汰了",
 			args: args{
-				maxEntries: 1,
+				maxBytes:   int64(len("test_new_value")),
 				key:        "test_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(time.Second * 10).Unix(),
@@ -102,7 +102,8 @@ func TestCache_Get(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lru := New(tt.args.maxEntries)
+			//ch := make(chan string, 1000)
+			lru := New(tt.args.maxBytes)
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}
@@ -115,8 +116,8 @@ func TestCache_Get(t *testing.T) {
 
 func TestCache_ExpireTime(t *testing.T) {
 	type args struct {
-		maxEntries int
-		key        Key
+		maxBytes   int64
+		key        string
 		value      Value
 		expireTime int64
 	}
@@ -130,7 +131,7 @@ func TestCache_ExpireTime(t *testing.T) {
 		{
 			name: "存在且未过期",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "valid_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(10 * time.Second).Unix(),
@@ -144,7 +145,7 @@ func TestCache_ExpireTime(t *testing.T) {
 		{
 			name: "存在但已过期",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "expired_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(-1 * time.Second).Unix(),
@@ -158,8 +159,8 @@ func TestCache_ExpireTime(t *testing.T) {
 		{
 			name: "key不存在",
 			args: args{
-				maxEntries: 3,
-				key:        "nonexistent_key",
+				maxBytes: 1000,
+				key:      "nonexistent_key",
 			},
 			prepare: nil,
 			wantTTL: func() int64 { return 0 },
@@ -168,7 +169,7 @@ func TestCache_ExpireTime(t *testing.T) {
 		{
 			name: "永不过期项",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "no_expire_key",
 				value:      testValue{"test_value"},
 				expireTime: -1, // 永不过期
@@ -182,7 +183,7 @@ func TestCache_ExpireTime(t *testing.T) {
 		{
 			name: "更新过期时间",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   1000,
 				key:        "update_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(20 * time.Second).Unix(),
@@ -198,7 +199,8 @@ func TestCache_ExpireTime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lru := New(tt.args.maxEntries)
+			//ch := make(chan string, 1000)
+			lru := New(tt.args.maxBytes)
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}
@@ -224,8 +226,8 @@ func TestCache_ExpireTime(t *testing.T) {
 
 func TestCache_Del(t *testing.T) {
 	type args struct {
-		maxEntries int
-		key        Key
+		maxBytes   int64
+		key        string
 		value      Value
 		expireTime int64
 	}
@@ -239,7 +241,7 @@ func TestCache_Del(t *testing.T) {
 		{
 			name: "删除存在的 key",
 			args: args{
-				maxEntries: 3,
+				maxBytes:   3,
 				key:        "existing_key",
 				value:      testValue{"test_value"},
 				expireTime: time.Now().Add(10 * time.Second).Unix(),
@@ -253,8 +255,8 @@ func TestCache_Del(t *testing.T) {
 		{
 			name: "删除不存在的 key",
 			args: args{
-				maxEntries: 3,
-				key:        "nonexistent_key",
+				maxBytes: 3,
+				key:      "nonexistent_key",
 			},
 			prepare: nil, // 不添加任何数据
 			wantLen: 0,
@@ -264,7 +266,8 @@ func TestCache_Del(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lru := New(tt.args.maxEntries)
+			//ch := make(chan string, 1000)
+			lru := New(tt.args.maxBytes)
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}

@@ -7,32 +7,31 @@ import (
 
 type Cache struct {
 	//如果为0，代表无限制
-	maxEntries int
-	list       *list.List
-	cache      map[interface{}]*list.Element
+	maxBytes int64
+	nBytes   int64
+	list     *list.List
+	cache    map[interface{}]*list.Element
 }
-
-type Key interface{}
 
 type Value interface {
 	Len() int
 }
 
 type entry struct {
-	key        Key
+	key        string
 	value      Value
 	expireTime int64 //过期时间的时间戳
 }
 
-func New(maxEntries int) *Cache {
+func New(maxBytes int64) *Cache {
 	return &Cache{
-		maxEntries: maxEntries,
-		list:       list.New(),
-		cache:      make(map[interface{}]*list.Element),
+		maxBytes: maxBytes,
+		list:     list.New(),
+		cache:    make(map[interface{}]*list.Element),
 	}
 }
 
-func (c *Cache) Add(key Key, value Value, expireTime int64) {
+func (c *Cache) Add(key string, value Value, expireTime int64) {
 	//如果缓存为空，则初始化（延迟初始化）
 	if c.cache == nil {
 		c.cache = make(map[interface{}]*list.Element)
@@ -42,21 +41,27 @@ func (c *Cache) Add(key Key, value Value, expireTime int64) {
 	if e, ok := c.cache[key]; ok {
 		//将该key对应的元素移动到链表头部
 		c.list.MoveToFront(e)
-		e.Value.(*entry).value = value
-		e.Value.(*entry).expireTime = expireTime
+		eentry := e.Value.(*entry)
+
+		//更新byte数
+		c.nBytes += int64(value.Len()) - int64(eentry.value.Len())
+
+		eentry.value = value
+		eentry.expireTime = expireTime
 		return
 	}
 
 	//添加元素
 	e := c.list.PushFront(&entry{key, value, expireTime})
+	c.nBytes += int64(value.Len())
 	c.cache[key] = e
 
 	//如果缓存已满，则删除最老的元素
-	if c.maxEntries > 0 && c.list.Len() > c.maxEntries {
+	for c.maxBytes > 0 && c.nBytes > c.maxBytes {
 		c.RemoveOldest()
 	}
 }
-func (c *Cache) Get(key Key) (value interface{}, ok bool) {
+func (c *Cache) Get(key string) (value Value, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
@@ -72,7 +77,7 @@ func (c *Cache) Get(key Key) (value interface{}, ok bool) {
 	return
 }
 
-func (c *Cache) ExpireTime(key Key) (expireTime int64, ok bool) {
+func (c *Cache) ExpireTime(key string) (expireTime int64, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
@@ -88,7 +93,7 @@ func (c *Cache) ExpireTime(key Key) (expireTime int64, ok bool) {
 	return 0, false
 }
 
-func (c *Cache) Del(key Key) {
+func (c *Cache) Del(key string) {
 	if c.cache == nil {
 		return
 	}
@@ -111,7 +116,15 @@ func (c *Cache) removeElement(e *list.Element) {
 	//过期了，删除该节点
 	c.list.Remove(e)
 	//同时删除cache中的key
-	delete(c.cache, e.Value.(*entry).key)
+	eentry := e.Value.(*entry)
+
+	c.nBytes -= int64(eentry.value.Len())
+
+	delete(c.cache, eentry.key)
+}
+
+func (c *Cache) Bytes() int64 {
+	return c.nBytes
 }
 
 func (c *Cache) Length() int {

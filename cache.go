@@ -9,12 +9,10 @@ import (
 	"context"
 	"errors"
 	"golang.org/x/sync/singleflight"
-	"sync"
 	"time"
 )
 
 type Cache struct {
-	mu          sync.RWMutex
 	local       *local.Cache
 	distribute  *distribute.Cache
 	singleGroup singleflight.Group
@@ -71,16 +69,24 @@ func (c *Cache) Get(ctx context.Context, key string) ([]byte, error) {
 	return res.(pkg.ByteView).ByteSlice(), nil
 }
 
+// Add 添加kv对
 func (c *Cache) Add(ctx context.Context, key string, value []byte, expireTime time.Duration) error {
 	return c.distribute.Add(ctx, key, pkg.NewByteView(value), expireTime)
 }
 
+// AddNode 添加节点
 func (c *Cache) AddNode(name string, peer distribute.Peer) error {
 	return c.distribute.AddNode(name, peer)
 }
 
+// RemoveNode 移除节点
 func (c *Cache) RemoveNode(name string) error {
 	return c.distribute.RemoveNode(name)
+}
+
+// RedistributionKeys 重新分配key
+func (c *Cache) RedistributionKeys() error {
+	return c.distribute.RedistributionKeys()
 }
 
 func (c *Cache) Opts() CacheOpts {

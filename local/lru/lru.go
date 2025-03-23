@@ -39,6 +39,10 @@ func (c *Cache) Add(key string, value Value, expireTime int64) {
 		c.cache = make(map[interface{}]*list.Element)
 		c.list = list.New()
 	}
+	//检查存储的过期时间
+	if checkExpire(expireTime) {
+		return
+	}
 	//如果缓存中存在，则更新数据
 	if e, ok := c.cache[key]; ok {
 		//将该key对应的元素移动到链表头部
@@ -67,8 +71,7 @@ func (c *Cache) Get(key string) (value Value, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
-		if e.Value.(*entry).expireTime < 0 ||
-			(e.Value.(*entry).expireTime >= 0 && e.Value.(*entry).expireTime >= getTime()) {
+		if !checkExpire(e.Value.(*entry).expireTime) {
 			//将该key对应的元素移动到链表头部
 			c.list.MoveToFront(e)
 			return e.Value.(*entry).value, true
@@ -83,8 +86,7 @@ func (c *Cache) ExpireTime(key string) (expireTime int64, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
-		if e.Value.(*entry).expireTime < 0 ||
-			(e.Value.(*entry).expireTime >= 0 && e.Value.(*entry).expireTime >= getTime()) {
+		if !checkExpire(e.Value.(*entry).expireTime) {
 			//将该key对应的元素移动到链表头部
 			c.list.MoveToFront(e)
 			return e.Value.(*entry).expireTime, true
@@ -133,6 +135,12 @@ func (c *Cache) Length() int {
 	return c.list.Len()
 }
 
-func getTime() int64 {
-	return time.Now().Unix()
+func checkExpire(expireTime int64) bool {
+	if expireTime < 0 {
+		return false
+	}
+	if expireTime == 0 {
+		return true
+	}
+	return expireTime <= time.Now().Unix()
 }

@@ -103,7 +103,7 @@ func TestCache_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			//ch := make(chan string, 1000)
-			lru := New(tt.args.maxBytes)
+			lru := New(MaxBytes(tt.args.maxBytes))
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}
@@ -200,7 +200,7 @@ func TestCache_ExpireTime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			//ch := make(chan string, 1000)
-			lru := New(tt.args.maxBytes)
+			lru := New(MaxBytes(tt.args.maxBytes))
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}
@@ -267,7 +267,7 @@ func TestCache_Del(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			//ch := make(chan string, 1000)
-			lru := New(tt.args.maxBytes)
+			lru := New(MaxBytes(tt.args.maxBytes))
 			if tt.prepare != nil {
 				tt.prepare(lru, tt.args)
 			}

@@ -19,6 +19,17 @@ type RedisPeer struct {
 	mu   sync.RWMutex
 }
 
+func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {
+	if err := cli.Ping(context.Background()).Err(); err != nil {
+		return nil, err
+	}
+	return &RedisPeer{
+		name: name,
+		cli:  cli,
+		mode: NormalMode,
+	}, nil
+}
+
 func (r *RedisPeer) Len() int {
 	count, err := r.cli.DBSize(context.Background()).Result()
 	if err != nil {
@@ -40,17 +51,6 @@ func (r *RedisPeer) Bytes() int64 {
 	var usedMemory int64
 	fmt.Sscanf(info, "%*s used_memory:%d", &usedMemory) // 提取 used_memory
 	return usedMemory
-}
-
-func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {
-	if err := cli.Ping(context.Background()).Err(); err != nil {
-		return nil, err
-	}
-	return &RedisPeer{
-		name: name,
-		cli:  cli,
-		mode: NormalMode,
-	}, nil
 }
 
 func (r *RedisPeer) Name() string {
@@ -216,7 +216,7 @@ func (r *RedisPeer) Add(ctx context.Context, identity string, elements ...Elemen
 			}
 			var expire = element.ExpireTime
 			if element.ExpireTime < 0 {
-				expire = redis.KeepTTL
+				expire = 0
 			}
 			pipe.Set(ctx, element.Key, string(element.Value), expire)
 		}

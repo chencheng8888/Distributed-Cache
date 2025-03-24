@@ -263,18 +263,23 @@ outerLoop: // 定义标签
 
 	//最后我们需要删除from的kv对
 	// 并发批量删除
-	for len(toBeMigratedKeys) > 0 {
+	for start := 0; start < len(toBeMigratedKeys); start += p.batch {
+		end := start + p.batch
+		if end > len(toBeMigratedKeys) {
+			end = len(toBeMigratedKeys)
+		}
+
+		batchKeys := toBeMigratedKeys[start:end] // 只读，不修改原 slice
+
 		wg.Add(1)
 		err := p.pool.Submit(func() {
 			defer wg.Done()
-			var err error
-			if len(toBeMigratedKeys) >= p.batch {
-				err = from.Del(ctx, Server, toBeMigratedKeys[:p.batch]...)
-				toBeMigratedKeys = toBeMigratedKeys[p.batch:]
-			} else {
-				err = from.Del(ctx, Server, toBeMigratedKeys...)
-				toBeMigratedKeys = nil
+
+			if len(batchKeys) == 0 { // 避免空参数
+				return
 			}
+
+			err := from.Del(ctx, Server, batchKeys...)
 			if err != nil {
 				log.Printf("failed to delete elements from peer[%v]: %v", from.Name(), err)
 			}
@@ -283,9 +288,11 @@ outerLoop: // 定义标签
 			log.Printf("failed to submit delete task: %v", err)
 			wg.Done()
 		}
+		log.Printf("delete elements[%v] from peer[%v] successfully", batchKeys, from.Name())
 	}
 
 	wg.Wait()
+
 }
 
 func (p *PeerManagerImpl) RemovePeer(name string) error {

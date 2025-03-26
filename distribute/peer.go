@@ -5,10 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/panjf2000/ants/v2"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/panjf2000/ants/v2"
 )
 
 const (
@@ -36,6 +37,9 @@ func (e Element) String() string {
 type Peer interface {
 	//关闭连接
 	Close() error
+	//测试连接
+	Ping() bool
+	Pub() <-chan string
 
 	//基本信息
 	Name() string
@@ -60,9 +64,6 @@ type Peer interface {
 
 	//删除元素
 	Del(ctx context.Context, identity string, key ...string) error
-
-	//测试连接
-	Ping() bool
 }
 
 type PeerManager interface {
@@ -72,9 +73,11 @@ type PeerManager interface {
 	RedistributionKeys() error
 	InitPeers(peers map[string]Peer)
 	GetPeer(name string) (Peer, bool)
+	WatchPeerStatus(ctx context.Context, offlinePeer chan<- string)
+	WatchPeersKeys(ctx context.Context, peer Peer, changedKeys chan<- string)
 }
 
-type PeerManagerImpl struct {
+type peerManager struct {
 	mu    sync.RWMutex
 	peers map[string]Peer
 	//即将下线的结点，但是在数据迁移期间，其仍可以接受读操作
@@ -84,6 +87,8 @@ type PeerManagerImpl struct {
 	IsBeingMigrated bool
 	//批量获取key的数量
 	batch int
+	//轮询状态的间隔
+	pollingDelay time.Duration
 	//goroutine池
 	pool *ants.Pool
 }
@@ -97,7 +102,7 @@ func NewPeerManager(mp consistentHash.Map, batch Batch, poolSize PoolSize) (Peer
 		return nil, errors.New("create goroutine pool failed")
 	}
 
-	return &PeerManagerImpl{
+	return &peerManager{
 		peers:       make(map[string]Peer),
 		offlineSoon: make(map[string]Peer),
 		hash:        mp,
@@ -106,7 +111,46 @@ func NewPeerManager(mp consistentHash.Map, batch Batch, poolSize PoolSize) (Peer
 	}, nil
 }
 
-func (p *PeerManagerImpl) InitPeers(peers map[string]Peer) {
+func (p *peerManager) WatchPeerStatus(ctx context.Context, offlinePeer chan<- string) {
+	ticker := time.NewTicker(p.pollingDelay)
+	defer ticker.Stop() // 确保程序结束时停止 ticker
+
+	for {
+		select {
+		case <-ticker.C:
+			//由于是遍历map,应该加锁,防止并发写操作
+			p.mu.RLock()
+			for name, peer := range p.peers {
+				if peer == nil || !peer.Ping() {
+					offlinePeer <- name
+				}
+			}
+			p.mu.RUnlock()
+
+		case <-ctx.Done():
+			log.Println("ended monitoring of node status")
+			return
+		}
+	}
+}
+
+func (p *peerManager) WatchPeersKeys(ctx context.Context, peer Peer, changedKeys chan<- string) {
+	for {
+		if peer == nil {
+			log.Println("when watching peer's keys, find the peer is nil")
+			return
+		}
+		select {
+		case key := <-peer.Pub():
+			changedKeys <- key
+		case <-ctx.Done():
+			log.Printf("the monitoring of the node[%s]'s key has ended",peer.Name())
+			return
+		}
+	}
+}
+
+func (p *peerManager) InitPeers(peers map[string]Peer) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	//加载peers
@@ -123,7 +167,7 @@ func (p *PeerManagerImpl) InitPeers(peers map[string]Peer) {
 }
 
 // RedistributionKeys 重新分配kv对
-func (p *PeerManagerImpl) RedistributionKeys() error {
+func (p *peerManager) RedistributionKeys() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -188,7 +232,7 @@ func (p *PeerManagerImpl) RedistributionKeys() error {
 	return nil
 }
 
-func (p *PeerManagerImpl) migrateData(ctx context.Context, from, to Peer, toBeMigratedKeys []string) {
+func (p *peerManager) migrateData(ctx context.Context, from, to Peer, toBeMigratedKeys []string) {
 	if from == nil || to == nil {
 		log.Printf("when migrating data, it is found that at least one of from and to is empty")
 		return
@@ -295,7 +339,7 @@ outerLoop: // 定义标签
 
 }
 
-func (p *PeerManagerImpl) RemovePeer(name string) error {
+func (p *peerManager) RemovePeer(name string) error {
 
 	//变更结点信息时，不能进行读取操作
 	p.mu.Lock()
@@ -385,7 +429,7 @@ func (p *PeerManagerImpl) RemovePeer(name string) error {
 	return nil
 }
 
-func (p *PeerManagerImpl) AddPeer(name string, peer Peer) error {
+func (p *peerManager) AddPeer(name string, peer Peer) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -473,7 +517,7 @@ func (p *PeerManagerImpl) AddPeer(name string, peer Peer) error {
 	return nil
 }
 
-func (p *PeerManagerImpl) PickPeer(key string) (Peer, bool) {
+func (p *peerManager) PickPeer(key string) (Peer, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -490,7 +534,7 @@ func (p *PeerManagerImpl) PickPeer(key string) (Peer, bool) {
 	}
 	return nil, false
 }
-func (p *PeerManagerImpl) GetPeer(name string) (Peer, bool) {
+func (p *peerManager) GetPeer(name string) (Peer, bool) {
 	if peer, ok := p.peers[name]; ok {
 		return peer, true
 	}
@@ -499,7 +543,7 @@ func (p *PeerManagerImpl) GetPeer(name string) (Peer, bool) {
 
 // 假删除
 // 实际上，我们并不真正删除结点，而是将其设置为只读状态，并加入到即将下线的map中
-func (p *PeerManagerImpl) fakeRemove(name string) (Peer, error) {
+func (p *peerManager) fakeRemove(name string) (Peer, error) {
 	if name == "" {
 		return nil, errors.New("name is empty")
 	}
@@ -511,6 +555,11 @@ func (p *PeerManagerImpl) fakeRemove(name string) (Peer, error) {
 	//移除结点
 	delete(p.peers, name)
 
+	//移除后,检查下peer是否为nil
+	if peer == nil {
+		return nil, errors.New("peer is nil")
+	}
+
 	//将结点加入到即将下线的map中，其仍可以接受读操作
 	//并将结点设置为只读
 	p.offlineSoon[name] = peer
@@ -521,7 +570,7 @@ func (p *PeerManagerImpl) fakeRemove(name string) (Peer, error) {
 
 // 真删除
 // 删除结点，并关闭连接
-func (p *PeerManagerImpl) trueRemove(peer Peer) {
+func (p *peerManager) trueRemove(peer Peer) {
 	name := peer.Name()
 
 	if _, ok := p.peers[name]; ok {
@@ -538,7 +587,7 @@ func (p *PeerManagerImpl) trueRemove(peer Peer) {
 }
 
 // 获取某个结点所有的Key
-func (p *PeerManagerImpl) getNodeKeys(from string) []string {
+func (p *peerManager) getNodeKeys(from string) []string {
 	var keyCh = make(chan string, p.batch)
 	//开启一个协程来获取key
 	go func() {

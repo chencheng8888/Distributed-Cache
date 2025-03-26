@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
+
+
+// TODO 实现当结点变化时，发送信号到channel中
 
 //使用go-redis["github.com/redis/go-redis/v9"]实现peer接口
 
@@ -17,18 +21,29 @@ type RedisPeer struct {
 	cli  *redis.Client
 	mode int
 	mu   sync.RWMutex
+	changedKeys chan string
 }
+
+
 
 func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {
 	if err := cli.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
+	
 	return &RedisPeer{
 		name: name,
 		cli:  cli,
 		mode: NormalMode,
 	}, nil
 }
+
+
+func (r *RedisPeer) Pub() <-chan string {
+	return r.changedKeys
+}
+
+
 
 func (r *RedisPeer) Len() int {
 	count, err := r.cli.DBSize(context.Background()).Result()

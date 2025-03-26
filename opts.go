@@ -12,6 +12,7 @@ var defaultOpts = CacheOpts{
 	replicas:                10,
 	migrationBatchSize:      100,
 	migrationGoroutineLimit: 30,
+	pipeBufferSize: 10,
 }
 
 type CacheOpt func(*CacheOpts)
@@ -22,7 +23,8 @@ type CacheOpts struct {
 	hashFunc                func(data []byte) uint32
 	replicas                int //虚拟节点倍数
 	migrationBatchSize      int //迁移结点数据时一次迁移的key数
-	migrationGoroutineLimit int
+	migrationGoroutineLimit int //迁移结点数据时最大的goroutine数量
+	pipeBufferSize int //监听结点的管道大小
 }
 
 func (o CacheOpts) LocalCacheExpire() time.Duration {
@@ -43,6 +45,10 @@ func (o CacheOpts) MigrationBatchSize() int {
 func (o CacheOpts) MigrationGoroutineLimit() int {
 	return o.migrationGoroutineLimit
 }
+func (o CacheOpts) PipeBufferSize() int{
+	return o.pipeBufferSize
+}
+
 
 // WithLocalCacheExpire 本地缓存的过期时间
 func WithLocalCacheExpire(expire time.Duration) CacheOpt {
@@ -86,6 +92,14 @@ func WithMigrationGoroutineLimit(limit int) CacheOpt {
 	}
 }
 
+// WithPipeBufferSize 监听结点的管道大小
+func WithPipeBufferSize(size int) CacheOpt {
+	return func(opts *CacheOpts) {
+		opts.pipeBufferSize  = size
+	}
+}
+
+
 func repairOpts(opts *CacheOpts) {
 	if opts.localCacheExpire <= 0 {
 		opts.localCacheExpire = defaultOpts.localCacheExpire
@@ -104,5 +118,8 @@ func repairOpts(opts *CacheOpts) {
 	}
 	if opts.migrationGoroutineLimit <= 0 {
 		opts.migrationGoroutineLimit = defaultOpts.migrationGoroutineLimit
+	}
+	if opts.pipeBufferSize<0 {
+		opts.pipeBufferSize  = defaultOpts.pipeBufferSize
 	}
 }

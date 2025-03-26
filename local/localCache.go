@@ -22,6 +22,12 @@ func (c *Cache) Add(key string, value pkg.ByteView, expireTime int64) {
 	c.cache.Add(key, value, expireTime)
 }
 
+func (c *Cache) Del(key string){
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache.Del(key)
+}
+
 func (c *Cache) Get(key string) (value pkg.ByteView, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

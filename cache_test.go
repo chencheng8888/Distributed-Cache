@@ -4,10 +4,11 @@ import (
 	"Distributed-Cache/distribute"
 	"context"
 	"fmt"
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 )
 
 const keyNum = 30

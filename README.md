@@ -43,7 +43,7 @@
 ### 安装
 
 ```bash
-go get github.com/yourusername/Distributed-Cache
+go get github.com/chencheng8888/Distributed-Cache
 ```
 
 ### 使用示例

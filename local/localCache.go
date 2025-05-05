@@ -28,6 +28,7 @@ func (c *Cache) Del(key string){
 	c.cache.Del(key)
 }
 
+
 func (c *Cache) Get(key string) (value pkg.ByteView, ok bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

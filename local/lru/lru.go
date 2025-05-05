@@ -40,9 +40,10 @@ func (c *Cache) Add(key string, value Value, expireTime int64) {
 		c.list = list.New()
 	}
 	//检查存储的过期时间
-	if checkExpire(expireTime) {
+	if !checkExpire(expireTime) {
 		return
 	}
+
 	//如果缓存中存在，则更新数据
 	if e, ok := c.cache[key]; ok {
 		//将该key对应的元素移动到链表头部
@@ -71,7 +72,7 @@ func (c *Cache) Get(key string) (value Value, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
-		if !checkExpire(e.Value.(*entry).expireTime) {
+		if checkExpire(e.Value.(*entry).expireTime) {
 			//将该key对应的元素移动到链表头部
 			c.list.MoveToFront(e)
 			return e.Value.(*entry).value, true
@@ -86,7 +87,7 @@ func (c *Cache) ExpireTime(key string) (expireTime int64, ok bool) {
 	//首先检查是否cache是否存在
 	if e, hit := c.cache[key]; hit {
 		//存在，则先检查是否过期
-		if !checkExpire(e.Value.(*entry).expireTime) {
+		if checkExpire(e.Value.(*entry).expireTime) {
 			//将该key对应的元素移动到链表头部
 			c.list.MoveToFront(e)
 			return e.Value.(*entry).expireTime, true
@@ -136,11 +137,20 @@ func (c *Cache) Length() int {
 }
 
 func checkExpire(expireTime int64) bool {
+	//如果expireTime小于0，代表不过期
+	//合法
 	if expireTime < 0 {
-		return false
-	}
-	if expireTime == 0 {
 		return true
 	}
-	return expireTime <= time.Now().Unix()
+	//如果expireTime等于0，代表不设置过期时间
+	//不合法
+	if expireTime == 0 {
+		return false
+	}
+	//如果expireTime大于0，代表设置了过期时间
+	//如果expireTime大于当前时间，代表未过期
+
+	currentTime := time.Now().Unix()
+
+	return expireTime > currentTime
 }

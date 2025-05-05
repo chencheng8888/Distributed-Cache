@@ -19,12 +19,21 @@ func NewCache(cache *lru.Cache) *Cache {
 func (c *Cache) Add(key string, value pkg.ByteView, expireTime int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if len(key) == 0 || value.Len() == 0 {
+		return
+	}
+
 	c.cache.Add(key, value, expireTime)
 }
 
 func (c *Cache) Del(key string){
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if len(key) == 0 {
+		return
+	}		
+
 	c.cache.Del(key)
 }
 

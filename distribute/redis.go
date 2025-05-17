@@ -11,26 +11,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-
-// TODO 实现当结点变化时，发送信号到channel中
-
 //使用go-redis["github.com/redis/go-redis/v9"]实现peer接口
 
 type RedisPeer struct {
-	name string
-	cli  *redis.Client
-	mode int
-	mu   sync.RWMutex
+	name        string
+	cli         *redis.Client
+	mode        int
+	mu          sync.RWMutex
 	changedKeys chan string
 }
-
-
 
 func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {
 	if err := cli.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
-	
+
 	return &RedisPeer{
 		name: name,
 		cli:  cli,
@@ -38,12 +33,9 @@ func NewRedisPeer(name string, cli *redis.Client) (Peer, error) {
 	}, nil
 }
 
-
 func (r *RedisPeer) Pub() <-chan string {
 	return r.changedKeys
 }
-
-
 
 func (r *RedisPeer) Len() int {
 	count, err := r.cli.DBSize(context.Background()).Result()
@@ -106,6 +98,11 @@ func (r *RedisPeer) Del(ctx context.Context, identity string, key ...string) err
 	if err != nil {
 		log.Printf("Delete Key[%s] from peer[name:%s addr:%s] failed:%s", key, r.Name(), r.Addr(), err)
 		return err
+	}
+	if r.changedKeys != nil {
+		for _, k := range key {
+			r.changedKeys <- k
+		}
 	}
 	return nil
 }
@@ -241,6 +238,12 @@ func (r *RedisPeer) Add(ctx context.Context, identity string, elements ...Elemen
 		log.Printf("add elements[%v] to peer[name:%s addr:%s] failed:%s", elements, r.Name(), r.Addr(), err)
 		return err
 	}
+	if r.changedKeys != nil {
+		for _, element := range elements {
+			r.changedKeys <- element.Key
+		}
+	}
+
 	return nil
 }
 
